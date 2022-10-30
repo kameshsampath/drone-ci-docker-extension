@@ -19,8 +19,8 @@ const (
 	Running
 	//3 represents failed stage/step
 	Error
-	//4 represents stopped/cancelled
-	Stopped
+	//4 represents stopped/cancelled/killed
+	Killed
 )
 
 func (s Status) String() string {
@@ -32,7 +32,7 @@ func (s Status) String() string {
 	case 3:
 		return "error"
 	case 4:
-		return "stopped"
+		return "killed"
 	default:
 		return "none"
 	}

@@ -44,7 +44,7 @@ func loadFixtures() error {
 		db.WithLogger(log),
 		db.WithDBFile(getDBFile("test")))
 
-	dbc.Init()
+	dbc.Init(true)
 
 	err = dbc.DB.Ping()
 
@@ -499,42 +499,59 @@ func TestUpdateStageStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	statusTests := map[string]struct {
-		stageID int
-		uriPath string
-		dbFile  string
-		want    db.Status
+		stageID     int
+		uriPath     string
+		dbFile      string
+		requestBody string
+		want        db.Status
 	}{
 		"success": {
 			stageID: 5,
-			uriPath: "/stage/:id/:status",
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.Success,
+			requestBody: `{ "stageName": "use-secret",
+"status": "success",
+"pipelineFile": "/tmp/examples/multi-stage/.drone.yml"}`,
+			want: db.Success,
 		},
 		"failed": {
 			stageID: 4,
-			uriPath: "/stage/:id/:status",
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.Error,
+			requestBody: `{ "stageName": "use-env",
+"status": "error",
+"pipelineFile": "/tmp/examples/multi-stage/.drone.yml"}`,
+			want: db.Error,
 		},
-		"default": {
+		"killed": {
 			stageID: 7,
-			uriPath: "/stage/:id/:status",
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.None,
+			requestBody: `{ "stageName": "default",
+"status": "killed",
+"pipelineFile": "/tmp/examples/use-secrets/.drone.yml"}`,
+			want: db.Killed,
+		},
+		"none": {
+			stageID: 6,
+			uriPath: "/stage/status",
+			dbFile:  "test",
+			requestBody: `{ "stageName": "default",
+"status": "",
+"pipelineFile": "/tmp/examples/use-env/.drone.yml"}`,
+			want: db.None,
 		},
 	}
 
 	for name, tc := range statusTests {
 		t.Run(name, func(t *testing.T) {
 			e := echo.New()
-			req := httptest.NewRequest(http.MethodPatch, tc.uriPath, nil)
+			req := httptest.NewRequest(http.MethodPatch, tc.uriPath, strings.NewReader(tc.requestBody))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			ctx := context.TODO()
 			h := NewHandler(ctx, getDBFile(tc.dbFile), log)
 			c := e.NewContext(req, rec)
-			c.SetPath(tc.uriPath)
-			c.SetParamNames("id", "status")
-			c.SetParamValues(fmt.Sprintf("%d", tc.stageID), fmt.Sprintf("%d", tc.want))
 			if assert.NoError(t, h.UpdateStageStatus(c)) {
 				assert.Equal(t, http.StatusNoContent, rec.Code)
 				dbConn := h.DatabaseConfig.DB
@@ -558,46 +575,66 @@ func TestUpdateStepStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	statusTests := map[string]struct {
-		stepID  int
-		uriPath string
-		dbFile  string
-		want    db.Status
+		stepID      int
+		uriPath     string
+		dbFile      string
+		requestBody string
+		want        db.Status
 	}{
 		"success": {
-			stepID:  5,
-			uriPath: "/step/:id/:status",
+			stepID:  1,
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.Success,
+			requestBody: `{ "stageName": "default", 
+"stepName": "unit test",
+"status": "success",
+"pipelineFile": "/tmp/examples/hello-world/.drone.yml"}`,
+			want: db.Success,
 		},
 		"failed": {
-			stepID:  4,
-			uriPath: "/step/:id/:status",
+			stepID:  6,
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.Error,
+			requestBody: `{ "stageName": "sleep-demos",
+"stepName" : "an error step",
+"status": "error",
+"pipelineFile": "/tmp/examples/long-run-demo/.drone.yml"}`,
+			want: db.Error,
 		},
-		"default": {
-			stepID:  7,
-			uriPath: "/step/:id/:status",
+		"killed": {
+			stepID:  9,
+			uriPath: "/stage/status",
 			dbFile:  "test",
-			want:    db.None,
+			requestBody: `{ "stageName": "use-env",
+"stepName": "display environment variables",
+"status": "killed",
+"pipelineFile": "/tmp/examples/multi-stage/.drone.yml"}`,
+			want: db.Killed,
+		},
+		"none": {
+			stepID:  8,
+			uriPath: "/stage/status",
+			dbFile:  "test",
+			requestBody: `{ "stageName": "default",
+"stepName": "good bye world",
+"status": "",
+"pipelineFile": "/tmp/examples/multi-stage/.drone.yml"}`,
+			want: db.None,
 		},
 	}
-
 	for name, tc := range statusTests {
 		t.Run(name, func(t *testing.T) {
 			e := echo.New()
-			req := httptest.NewRequest(http.MethodPatch, tc.uriPath, nil)
+			req := httptest.NewRequest(http.MethodPatch, tc.uriPath, strings.NewReader(tc.requestBody))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			ctx := context.TODO()
 			h := NewHandler(ctx, getDBFile(tc.dbFile), log)
 			c := e.NewContext(req, rec)
-			c.SetPath(tc.uriPath)
-			c.SetParamNames("id", "status")
-			c.SetParamValues(fmt.Sprintf("%d", tc.stepID), fmt.Sprintf("%d", tc.want))
-			if assert.NoError(t, h.UpdateStageStatus(c)) {
+			if assert.NoError(t, h.UpdateStepStatus(c)) {
 				assert.Equal(t, http.StatusNoContent, rec.Code)
 				dbConn := h.DatabaseConfig.DB
-				step := &db.Stage{ID: tc.stepID}
+				step := &db.StageStep{ID: tc.stepID}
 				err := dbConn.NewSelect().
 					Model(step).
 					WherePK().

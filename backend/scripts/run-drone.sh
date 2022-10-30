@@ -6,6 +6,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PIPELINE_FILE="${BASH_ARGV[0]}"
 PID_FILE="${BASH_ARGV[1]}"
 
+mkdir -p "${SCRIPT_DIR}/logs"
+export DRONE_CI_EXTENSION_LOGS_PATH="${SCRIPT_DIR}/logs"
+
 if [ -z "$PIPELINE_FILE" ];
 then 
 	printf "\nNo pipeline file specified\n"

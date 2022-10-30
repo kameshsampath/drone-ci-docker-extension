@@ -17,6 +17,7 @@
     }
   },
   "host": {
+    "socket": "extension-drone-ci.sock",
     "binaries": [
       {
         "darwin": [

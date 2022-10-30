@@ -28,7 +28,6 @@ import (
 	"github.com/drone/runner-go/manifest"
 	"github.com/drone/runner-go/pipeline"
 	"github.com/drone/runner-go/pipeline/runtime"
-	"github.com/drone/runner-go/pipeline/streamer/console"
 	"github.com/drone/runner-go/registry"
 	"github.com/drone/runner-go/secret"
 	"github.com/drone/signal"
@@ -346,18 +345,32 @@ func exec(cliContext *cli.Context) error {
 		return err
 	}
 
+	//JSON Log Streamer
+	streamer, err := New(utils.Md5OfString(commy.Source))
+	if err != nil {
+		dump(state)
+		return err
+	}
+
+	// Update Status in DB
+	// hardcoding the socketPath
+	reporter := NewDBReporter(ctx, "extension-drone-ci.sock", commy.Source)
+
 	err = runtime.NewExecer(
-		pipeline.NopReporter(),
-		console.New(commy.Pretty),
+		reporter,
+		streamer,
 		pipeline.NopUploader(),
 		engine,
 		commy.Procs,
 	).Exec(ctx, spec, state)
 
+	defer streamer.writer.Close()
+
 	if err != nil {
 		dump(state)
 		return err
 	}
+
 	switch state.Stage.Status {
 	case drone.StatusError, drone.StatusFailing, drone.StatusKilled:
 		os.Exit(1)
@@ -365,7 +378,7 @@ func exec(cliContext *cli.Context) error {
 	return nil
 }
 
-// TODO new JSON logger
+// TODO use JSON logger
 func dump(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

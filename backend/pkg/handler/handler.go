@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/docker/docker/client"
+	"github.com/drone/drone-go/drone"
 	"github.com/harness/drone-ci-docker-extension/pkg/db"
 	"github.com/harness/drone-ci-docker-extension/pkg/utils"
 	"github.com/labstack/echo/v4"
@@ -15,20 +16,28 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// UpdateReq helps to capture the Stage or Status Update Requests
+type UpdateReq struct {
+	PipelineFile string `json:"pipelineFile"`
+	StageName    string `json:"stageName"`
+	StepName     string `json:"stepName,omitempty"`
+	Status       string `json:"status"`
+}
+
 func NewHandler(ctx context.Context, dbFile string, log *logrus.Logger) *Handler {
 	dbc := db.New(
 		db.WithContext(ctx),
 		db.WithLogger(log),
 		db.WithDBFile(dbFile),
 	)
-	dbc.Init()
+	dbc.Init(true)
 
 	return &Handler{
 		DatabaseConfig: dbc,
 	}
 }
 
-//GetStages selects all the available stages from the backend. The selected stages are sorted in ascending using column `pipeline_file`
+// GetStages selects all the available stages from the backend. The selected stages are sorted in ascending using column `pipeline_file`
 func (h *Handler) GetStages(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	log.Info("Get Stages")
@@ -47,7 +56,7 @@ func (h *Handler) GetStages(c echo.Context) error {
 	return c.JSON(http.StatusOK, stages)
 }
 
-//GetStagesByPipelineFile selects selects stages associated with a PipelineFile
+// GetStagesByPipelineFile selects selects stages associated with a PipelineFile
 func (h *Handler) GetStagesByPipelineFile(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	var pipelineFile string
@@ -74,7 +83,7 @@ func (h *Handler) GetStagesByPipelineFile(c echo.Context) error {
 	return c.JSON(http.StatusOK, stages)
 }
 
-//GetStage selects selects a stage by id from the backend.
+// GetStage selects selects a stage by id from the backend.
 func (h *Handler) GetStage(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	var stageID int
@@ -103,7 +112,7 @@ func (h *Handler) GetStage(c echo.Context) error {
 	return c.JSON(http.StatusOK, stage)
 }
 
-//DeleteStages deletes one or more stage ids from the backend
+// DeleteStages deletes one or more stage ids from the backend
 func (h *Handler) DeleteAllStages(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	var stages []*db.Stage
@@ -142,7 +151,7 @@ func (h *Handler) DeleteAllStages(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-//DeletePipeline delete all the stages and its steps of a defined PipelineFile
+// DeletePipeline delete all the stages and its steps of a defined PipelineFile
 func (h *Handler) DeletePipeline(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	var pipelineFile string
@@ -218,7 +227,7 @@ func (h *Handler) delete(stages db.Stages) error {
 	})
 }
 
-//SaveStages saves one or more stage ids to the backend
+// SaveStages saves one or more stage ids to the backend
 func (h *Handler) SaveStages(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	ctx := h.DatabaseConfig.Ctx
@@ -285,42 +294,37 @@ func (h *Handler) StageLogs(c echo.Context) error {
 // one of the following:
 // 0  - None
 // 1  - Success
-// 2  - Failed
+// 2  - Running
+// 3  - Error
+// 4  - Stopped/Killed
 func (h *Handler) UpdateStageStatus(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	ctx := h.DatabaseConfig.Ctx
 	dbConn := h.DatabaseConfig.DB
-	var stageID, status int
-	if err := echo.PathParamsBinder(c).
-		Int("id", &stageID).
-		Int("status", &status).
-		BindError(); err != nil {
+	stageUReq := &UpdateReq{}
+	if err := c.Bind(stageUReq); err != nil {
 		return err
 	}
 
-	log.Infof("Updating Stage %d with status %d", stageID, status)
-
 	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		stage := &db.Stage{
-			ID:     stageID,
-			Status: db.Status(status),
-		}
+		log.Infof("Updating Stage Find Stage : %#v", stageUReq)
+		status := fromDroneStatus(stageUReq.Status)
+		log.Infof("Updating Stage %s with status %s", stageUReq.StageName, status)
 		_, err := dbConn.NewUpdate().
-			Model(stage).
-			Column("status").
-			WherePK().
+			Model((*db.Stage)(nil)).
+			Set("status = ?", status).
+			Where("name = ? and pipeline_file = ? ", stageUReq.StageName, stageUReq.PipelineFile).
 			Exec(ctx)
 		return err
 	}); err != nil {
 		return err
 	}
 
-	if cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err != nil {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
 		return err
-	} else {
-		utils.TriggerUIRefresh(ctx, cli, log)
 	}
-
+	utils.TriggerUIRefresh(ctx, cli, log)
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -328,42 +332,41 @@ func (h *Handler) UpdateStageStatus(c echo.Context) error {
 // one of the following:
 // 0  - None
 // 1  - Success
-// 2  - Failed
+// 2  - Running
+// 3  - Error
+// 4  - Stopped/Killed
 
 func (h *Handler) UpdateStepStatus(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	ctx := h.DatabaseConfig.Ctx
 	dbConn := h.DatabaseConfig.DB
-	var stepID, status int
-	if err := echo.PathParamsBinder(c).
-		Int("stepId", &stepID).
-		Int("status", &status).
-		BindError(); err != nil {
+	stepUReq := &UpdateReq{}
+	if err := c.Bind(stepUReq); err != nil {
 		return err
 	}
 
-	log.Infof("Updating Step %d with status %d", stepID, status)
-
 	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		stageStep := &db.StageStep{
-			ID:     stepID,
-			Status: db.Status(status),
-		}
+		status := fromDroneStatus(stepUReq.Status)
+		log.Infof("Updating Step %s of Stage %s with status %s", stepUReq.StepName, stepUReq.StageName, status)
+		stageQ := dbConn.NewSelect().
+			Model((*db.Stage)(nil)).
+			Column("id").
+			Where("name = ? AND pipeline_file = ? ", stepUReq.StageName, stepUReq.PipelineFile, 1)
 		_, err := dbConn.NewUpdate().
-			Model(stageStep).
-			Column("status").
-			WherePK().
+			Model((*db.StageStep)(nil)).
+			Set("status = ?", status).
+			Where("stage_id IN (?) AND name = ? ", stageQ, stepUReq.StepName).
 			Exec(ctx)
 		return err
 	}); err != nil {
 		return err
 	}
 
-	if cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err != nil {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
 		return err
-	} else {
-		utils.TriggerUIRefresh(ctx, cli, log)
 	}
+	utils.TriggerUIRefresh(ctx, cli, log)
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -416,4 +419,39 @@ func (h *Handler) CheckIfStepExists(c echo.Context) bool {
 		return false
 	}
 	return exists
+}
+
+func findStage(ctx context.Context, dbConn *bun.DB, name string, pipelineFile string, stage *db.Stage) error {
+	if err := dbConn.NewSelect().
+		Model(stage).
+		Where("name = ? and pipeline_file = ? ", name, pipelineFile).
+		Scan(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func findStep(ctx context.Context, dbConn *bun.DB, name string, stageID int, step *db.StageStep) error {
+	if err := dbConn.NewSelect().
+		Model(step).
+		Where("name = ? and stage_id = ?", name, stageID).
+		Scan(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func fromDroneStatus(droneStatus string) db.Status {
+	switch droneStatus {
+	case drone.StatusError:
+		return db.Error
+	case drone.StatusFailing:
+		return db.Error
+	case drone.StatusKilled:
+		return db.Killed
+	case "success":
+		return db.Success
+	default:
+		return db.None
+	}
 }

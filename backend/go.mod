@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/bfontaine/jsons v1.1.0
 	github.com/docker/docker v0.0.0-00010101000000-000000000000
 	github.com/drone-runners/drone-runner-docker v1.8.2
 	github.com/drone/drone-go v1.7.1

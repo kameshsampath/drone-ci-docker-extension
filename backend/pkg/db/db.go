@@ -13,7 +13,7 @@ import (
 	"github.com/uptrace/bun/extra/bundebug"
 )
 
-//Config configures the database to initialize
+// Config configures the database to initialize
 type Config struct {
 	Ctx    context.Context
 	dbOnce sync.Once
@@ -48,7 +48,7 @@ func WithDBFile(dbFile string) Option {
 	}
 }
 
-//New creates a new instance of Config to create and initialize new database
+// New creates a new instance of Config to create and initialize new database
 func New(options ...Option) *Config {
 	cfg := &Config{}
 	for _, o := range options {
@@ -58,8 +58,8 @@ func New(options ...Option) *Config {
 	return cfg
 }
 
-//Init initializes the database with the given configuration
-func (c *Config) Init() *bun.DB {
+// Init initializes the database with the given configuration
+func (c *Config) Init(createTables bool) *bun.DB {
 	c.dbOnce.Do(func() {
 		log := c.Log
 		log.Info("Initializing DB")
@@ -82,8 +82,10 @@ func (c *Config) Init() *bun.DB {
 		c.DB = db
 
 		//Setup Schema
-		if err := c.createTables(); err != nil {
-			log.Fatal(err)
+		if createTables {
+			if err := c.createTables(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	})
 

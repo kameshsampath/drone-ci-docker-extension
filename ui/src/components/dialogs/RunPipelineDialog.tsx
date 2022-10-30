@@ -225,7 +225,7 @@ export default function RunPipelineDialog({ ...props }) {
       ddClient.extension.host.cli.exec('run-drone', pipelineExecArgs, {
         stream: {
           onOutput(data) {
-            console.debug('onOutput:%s', JSON.stringify(data));
+            console.log('onOutput:%s', JSON.stringify(data));
             if (data.stderr) {
               // any signals to kill the drone process will be treated 
               // graciously - as it will denote docker signal 137 which

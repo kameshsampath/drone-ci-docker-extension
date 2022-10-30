@@ -169,7 +169,7 @@ func (c *Config) MonitorAndLog() {
 							if isService {
 								stepStatus = db.Success
 							} else { // when Pipeline is killed steps are killed with eit code 137, we can treat them to be stopped
-								stepStatus = db.Stopped
+								stepStatus = db.Killed
 							}
 						} else {
 							stepStatus = db.Error
@@ -179,7 +179,7 @@ func (c *Config) MonitorAndLog() {
 						// if the current step is last step
 						// or any error occurred
 						// or the pipeline is stopped
-						c.updateStatuses(stage, stepIdx == len(stage.Steps)-1 || stepStatus == db.Error || stepStatus == db.Stopped)
+						c.updateStatuses(stage, stepIdx == len(stage.Steps)-1 || stepStatus == db.Error || stepStatus == db.Killed)
 					default:
 						//no requirement to handle other cases
 					}
