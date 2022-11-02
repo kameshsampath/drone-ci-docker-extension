@@ -4,7 +4,7 @@ type: docker
 name: default
 
 steps:
-  - name: goreleaser
+  - name: binaries
     image: goreleaser/goreleaser
     pull: if-not-exists
     commands:
@@ -31,18 +31,15 @@ steps:
     pull: if-not-exists
     settings:
       dry_run: true
-      purge: false
-      dockerfile: docker/Dockerfile.Standalone
-      # https://github.com/thegeeklab/drone-docker-buildx/issues/141
-      # cache_from: 
-      #  - type=registry,ref=kameshsampath/drone-ci-docker-extension
-      cache_to: type=registry,ref=kameshsampath/drone-ci-docker-extension
+      output: "type=docker"
+      daemon_off: true
+      dockerfile: docker/Dockerfile.standalone
+      cache_from:
+        - 'type=registry\\,ref=kameshsampath/drone-ci-docker-extension-cache'
+      cache_to: "type=registry,ref=kameshsampath/drone-ci-docker-extension-cache"
       repo: drone/drone-ci-docker-extension
       tag:
         - latest
-      platforms:
-        - linux/amd64
-        - linux/arm64
       # keep the core context to minimum as we load named contexts
       context: docker
       named_context:
@@ -51,13 +48,23 @@ steps:
         - scripts=backend/scripts
         - etc=etc
     volumes:
-    - name: dockersock
-      path: /var/run/docker.sock
+      - name: dockersock
+        path: /var/run/docker.sock
+
+  - name: cleanup
+    image: kameshsampath/kube-dev-tools:0.0.8
+    privileged: true
+    commands:
+      - >
+        docker ps --filter=ancestor="moby/buildkit:buildx-stable-1" --format="{{ .ID }}" | xargs docker rm --force
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
 
 volumes:
-   - name: dockersock
-     host:
-       path: /var/run/docker.sock
+ - name: dockersock
+   host:
+     path: /var/run/docker.sock
 ---
 kind: pipeline
 type: docker
@@ -65,29 +72,18 @@ name: build-base
 
 steps:
   - name: build
-    image: docker/buildx-bin
+    image: thegeeklab/drone-docker-buildx
     privileged: true
-    pull: if-not-exists
-    commands: 
-    # settings:
-    #   daemon_off: true
-    #   dockerfile: docker/Dockerfile.pnpm
-    #   repo: kameshsampath/drone-ci-extension-ui-base
-    #   # https://github.com/thegeeklab/drone-docker-buildx/issues/141
-    #   # cache_from: 
-    #   #  - "type=registry,ref=kameshsampath/docker-extension-ui-cache"
-    #   cache_to: "type=registry,ref=kameshsampath/docker-extension-ui-cache"
-    #   tag:
-    #     - latest
-    #   platforms:
-    #     - linux/amd64
-    #     - linux/arm64
-    #   context: ui
-    volumes:
-    - name: dockersock
-      path: /var/run/docker.sock
-
-volumes:
-   - name: dockersock
-     host:
-       path: /var/run/docker.sock
+    settings:
+      daemon_off: true
+      dockerfile: docker/Dockerfile.pnpm
+      repo: kameshsampath/drone-ci-extension-ui-base
+      cache_from:
+        - 'type=registry\\,ref=kameshsampath/docker-extension-ui-cache'
+      cache_to: "type=registry,ref=kameshsampath/docker-extension-ui-cache"
+      tag:
+        - latest
+      platforms:
+        - linux/amd64
+        - linux/arm64
+      context: ui

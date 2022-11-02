@@ -1,21 +1,21 @@
 #syntax=docker/dockerfile:1.4
 
-FROM goreleaser/goreleaser AS bin
+# FROM goreleaser/goreleaser AS bin
 
-WORKDIR /build
+# WORKDIR /build
 
-COPY  --from=backendsrc . .
+# COPY  --from=backendsrc . .
 
-RUN goreleaser build --snapshot --rm-dist
+# RUN goreleaser build --snapshot --rm-dist
 
-FROM kameshsampath/drone-ci-extension-ui-base AS ui
+# FROM kameshsampath/drone-ci-extension-ui-base AS ui
 
-WORKDIR /app
+# WORKDIR /app
 
-COPY --from=uisrc . .
+# COPY --from=uisrc . .
 
-RUN pnpm install \
-  && pnpm run clean && pnpm run build
+# RUN pnpm install \
+#   && pnpm run clean && pnpm run build
 
 FROM alpine
 
@@ -49,29 +49,29 @@ RUN chmod +x /tools/darwin/yq \
 # End Download yq
 
 ## Copy Drone CLI
-COPY --from=bin "/build/dist/drone_darwin_${TARGETARCH}*/drone" /tools/darwin/drone
-COPY --from=bin "/build/dist/drone_linux_${TARGETARCH}*/drone"  /tools/linux/drone
-COPY --from=bin "/build/dist/drone_windows_${TARGETARCH}*/drone.exe"  /tools/windows/drone.exe
+COPY --from=dist "drone_darwin_${TARGETARCH}*/drone" /tools/darwin/drone
+COPY --from=dist "drone_linux_${TARGETARCH}*/drone"  /tools/linux/drone
+COPY --from=dist "drone_windows_${TARGETARCH}*/drone.exe"  /tools/windows/drone.exe
 
 RUN chmod +x /tools/darwin/drone /tools/linux/drone
 
 ## Copy pipelines-finder
 
-COPY --from=bin  "/build/dist/pipelines-finder_darwin_${TARGETARCH}*/pipelines-finder" /tools/darwin/pipelines-finder
-COPY --from=bin  "/build/dist/pipelines-finder_linux_${TARGETARCH}*/pipelines-finder"  /tools/linux/pipelines-finder
-COPY --from=bin  "/build/dist/pipelines-finder_windows_${TARGETARCH}*/pipelines-finder.exe" /tools/windows/pipelines-finder.exe
+COPY --from=dist  "pipelines-finder_darwin_${TARGETARCH}*/pipelines-finder" /tools/darwin/pipelines-finder
+COPY --from=dist  "pipelines-finder_linux_${TARGETARCH}*/pipelines-finder"  /tools/linux/pipelines-finder
+COPY --from=dist  "pipelines-finder_windows_${TARGETARCH}*/pipelines-finder.exe" /tools/windows/pipelines-finder.exe
 
 RUN chmod +x /tools/darwin/pipelines-finder /tools/linux/pipelines-finder
 
 # COPY backend service
-COPY --from=bin "/build/dist/backend_linux_${TARGETARCH}*/backend"  /backend
+COPY --from=dist "backend_linux_${TARGETARCH}*/backend"  /backend
 RUN chmod +x /backend
 
 COPY --from=etc /docker-compose.yaml .
 COPY --from=etc /metadata.json .
 COPY --from=etc /logo.svg .
 
-COPY --from=ui  /app/build ui
+COPY --from=ui  . ui
 
 COPY --from=scripts run-drone.sh /tools/run-drone
 COPY --from=scripts kill-drone.sh /tools/kill-drone

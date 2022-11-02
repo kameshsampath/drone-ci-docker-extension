@@ -19,11 +19,11 @@ bin:	## Build binaries
 bin-all:	## Build binaries for all targetted architectures
 	goreleaser build --snapshot --rm-dist
 
-build-ui-base:	prepare-buildx ## Build service image to be deployed as a desktop extension drone exec --trusted .drone.local.yml
-	docker buildx build --builder=$(BUILDER) -f docker/Dockerfile.pnpm ui --push --pull=true --cache-from $(UI_CACHE) --cache-to $(UI_CACHE) --platform linux/amd64,linux/arm64 -t $(UI_BASE_IMAGE):$(TAG)
+build-ui-base:	prepare-buildx ## Build service image to be deployed as a desktop extension 
+	drone exec --trusted --env-file=.env --pipeline=build-base .drone.local.yml
 
-build-extension:	prepare-buildx	## Build service image to be deployed as a desktop extension drone exec --trusted .drone.local.yml
-	docker buildx build --builder=$(BUILDER) -f docker/Dockerfile.standalone docker --load --push=false --pull=true --build-context=backendsrc=backend --build-context=uisrc=ui --build-context=scripts=backend/scripts --build-context=etc=etc --cache-from $(IMAGE_CACHE) --cache-to $(IMAGE_CACHE)  -t $(IMAGE):$(TAG) 
+build-extension:	## Build service image to be deployed as a desktop extension prepare-buildx	 
+	drone exec --trusted --env-file=.env $(INCLUDES) $(EXCLUDES) .drone.local.yml
 
 install-extension: build-extension ## Install the extension
 	docker extension install $(IMAGE):$(TAG)
@@ -31,21 +31,13 @@ install-extension: build-extension ## Install the extension
 uninstall-extension:	## Uninstall the extension
 	docker extension rm $(IMAGE):$(TAG) || true
 
-update-extension:	build-extension ## Update the extension
-	docker extension update $(IMAGE):$(TAG)
+update-extension:	uninstall-extension	install-extension ## Update the extension
 
 prepare-buildx: ## Create buildx builder for multi-arch build, if not exists
 	docker buildx inspect $(BUILDER) || docker buildx create --name=$(BUILDER) --driver=docker-container --driver-opt=network=host
 
-push-extension: prepare-buildx ## Build & Upload extension image to hub. Do not push if tag already exists: TAG=$(TAG) make push-extension
-	docker pull $(IMAGE):$(TAG) && echo "Failure: Tag already exists" || docker buildx build --push --builder=$(BUILDER) --platform=linux/amd64,linux/arm64 --build-arg TAG=$(TAG) --tag=$(IMAGE):$(TAG) --tag=$(IMAGE):latest .
-
-release-beta:	# Create a new beta release
-	git tag $$(svu patch --strip-prefix --suffix=beta)
-	git push upstream --tags
-
 release:	# Create a new release
-	git tag $$(svu patch --strip-prefix)
+	git tag $$(svu next --strip-prefix)
 	git push upstream --tags
 
 help: ## Show this help
