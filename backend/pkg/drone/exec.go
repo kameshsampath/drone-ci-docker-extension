@@ -3,11 +3,12 @@ package drone
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
+	r "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"github.com/drone-runners/drone-runner-docker/engine/compiler"
 	"github.com/drone-runners/drone-runner-docker/engine/linter"
 	"github.com/drone-runners/drone-runner-docker/engine/resource"
-	"github.com/harness/drone-ci-docker-extension/pkg/monitor"
 	"github.com/harness/drone-ci-docker-extension/pkg/utils"
 
 	"github.com/drone/drone-go/drone"
@@ -36,13 +36,43 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var nocontext = context.Background()
+const (
+	darwinExtensionSocketPath = "Library/Containers/com.docker.docker/Data/ext-sockets/drone_drone-ci-docker-extension/extension-drone-ci.sock"
+	//LabelPipelineFile is to identify the pipeline file
+	LabelPipelineFile = "io.drone.desktop.pipeline.file"
+	//LabelIncludes is to hold list of included steps as comma separated string
+	LabelIncludes = "io.drone.desktop.pipeline.includes"
+	//LabelExcludes is to hold list of excluded steps as comma separated string
+	LabelExcludes = "io.drone.desktop.pipeline.excludes"
+	//LabelStageName is to identify the stage name
+	LabelStageName = "io.drone.stage.name"
+	//LabelStepName is to identify the step name
+	LabelStepName = "io.drone.step.name"
+	//LabelStepNumber is to identify the step number
+	LabelStepNumber = "io.drone.step.number"
+	//LabelService to identify if the step is a "Service"
+	LabelService = "io.drone.desktop.pipeline.service"
+)
+
+var (
+	socketPath     = "backend-service-socket.sock"
+	nocontext      = context.Background()
+	log            = utils.LogSetup(os.Stdout, "info")
+	droneCIHome    string
+	droneCILogsDir string
+)
 
 // Command exports the exec command.
 var Command = &cli.Command{
 	Name:      "exec",
 	Usage:     "execute a local build",
 	ArgsUsage: "[path/to/.drone.yml]",
+	Before: func(ctx *cli.Context) error {
+		if err := createSocketLink(ctx); err != nil {
+			log.Fatalln(err)
+		}
+		return nil
+	},
 	Action: func(ctx *cli.Context) error {
 		if err := exec(ctx); err != nil {
 			log.Fatalln(err)
@@ -111,7 +141,6 @@ var Command = &cli.Command{
 }
 
 func exec(cliContext *cli.Context) error {
-	log := utils.LogSetup(os.Stdout, logrus.DebugLevel.String())
 	// lets do our mapping from CLI flags to an execCommand struct
 	commy := toExecCommand(cliContext)
 	rawsource, err := ioutil.ReadFile(commy.Source)
@@ -197,7 +226,7 @@ func exec(cliContext *cli.Context) error {
 		if comp.Labels == nil {
 			comp.Labels = make(map[string]string)
 		}
-		comp.Labels[monitor.LabelPipelineFile] = path.Join(pwd, commy.Source)
+		comp.Labels[LabelPipelineFile] = path.Join(pwd, commy.Source)
 	}
 
 	args := runtime.CompilerArgs{
@@ -219,25 +248,25 @@ func exec(cliContext *cli.Context) error {
 	for i, step := range spec.Steps {
 		extraLabels := map[string]string{}
 
-		extraLabels[monitor.LabelStageName] = strings.TrimSpace(p.Name)
-		extraLabels[monitor.LabelStepName] = strings.TrimSpace(step.Name)
-		extraLabels[monitor.LabelStepNumber] = strconv.Itoa(i)
+		extraLabels[LabelStageName] = strings.TrimSpace(p.Name)
+		extraLabels[LabelStepName] = strings.TrimSpace(step.Name)
+		extraLabels[LabelStepNumber] = strconv.Itoa(i)
 
 		//Know the includes while running the pipeline from the extension
 		//TODO improve
 		if len(commy.Include) > 0 {
-			extraLabels[monitor.LabelIncludes] = strings.Join(commy.Include, ",")
+			extraLabels[LabelIncludes] = strings.Join(commy.Include, ",")
 		}
 
 		//Know the excludes while running the pipeline from the extension
 		if len(commy.Exclude) > 0 {
-			extraLabels[monitor.LabelExcludes] = strings.Join(commy.Exclude, ",")
+			extraLabels[LabelExcludes] = strings.Join(commy.Exclude, ",")
 		}
 		//Label the services from steps
 		for _, svc := range p.Services {
 			if b := step.Name == svc.Name; b {
-				log.Infof("%s Service == Step %s", svc.Name, step.Name)
-				extraLabels[monitor.LabelService] = strconv.FormatBool(b)
+				log.Tracef("%s Service == Step %s", svc.Name, step.Name)
+				extraLabels[LabelService] = strconv.FormatBool(b)
 				break
 			}
 		}
@@ -345,16 +374,20 @@ func exec(cliContext *cli.Context) error {
 		return err
 	}
 
+	pipelineID := utils.Md5OfString(commy.Source)
+
 	//JSON Log Streamer
-	streamer, err := New(utils.Md5OfString(commy.Source))
+	streamer, err := newStreamer(pipelineID)
 	if err != nil {
-		dump(state)
+		dump(pipelineID, map[string]interface{}{
+			"error": err.Error(),
+			"state": state,
+		})
 		return err
 	}
 
 	// Update Status in DB
-	// hardcoding the socketPath
-	reporter := NewDBReporter(ctx, "extension-drone-ci.sock", commy.Source)
+	reporter := newDBReporter(ctx, commy.Source)
 
 	err = runtime.NewExecer(
 		reporter,
@@ -367,7 +400,10 @@ func exec(cliContext *cli.Context) error {
 	defer streamer.writer.Close()
 
 	if err != nil {
-		dump(state)
+		dump(pipelineID, map[string]interface{}{
+			"error": err.Error(),
+			"state": state,
+		})
 		return err
 	}
 
@@ -378,9 +414,69 @@ func exec(cliContext *cli.Context) error {
 	return nil
 }
 
-// TODO use JSON logger
-func dump(v interface{}) {
-	enc := json.NewEncoder(os.Stdout)
+func dump(pipelineID string, m map[string]interface{}) {
+	errLog := path.Join(droneCILogsDir, fmt.Sprintf("%s-err.json", pipelineID))
+	f, err := os.OpenFile(errLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	var enc *json.Encoder
+	if err != nil {
+		log.Errorf("Error Opening file %s, %s,using stdout", errLog, err)
+		enc = json.NewEncoder(os.Stdout)
+	} else {
+		enc = json.NewEncoder(f)
+	}
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
+	_ = enc.Encode(m)
+	defer f.Close()
+}
+
+func mkdirs() error {
+	droneCIHome = path.Join(os.Getenv("HOME"), ".droneci")
+	_, err := os.Stat(droneCIHome)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		err := os.MkdirAll(droneCIHome, 0700)
+		if err != nil {
+			err = fmt.Errorf("unable to create %s,%w", droneCIHome, err)
+			log.Error(err)
+			return err
+		}
+	}
+	droneCILogsDir = path.Join(droneCIHome, "logs")
+	return os.MkdirAll(droneCILogsDir, 0700)
+}
+
+func createSocketLink(_ *cli.Context) error {
+	if err := mkdirs(); err != nil {
+		return err
+	}
+	switch r.GOOS {
+	case "darwin":
+		sp := path.Join(os.Getenv("HOME"), darwinExtensionSocketPath)
+		_, err := os.Stat(sp)
+		if err != nil && errors.Is(err, os.ErrNotExist) {
+			err := fmt.Errorf("extension socket %s not available,%w", sp, err)
+			log.Error(err)
+			return err
+		}
+
+		socketPath = path.Join(droneCIHome, socketPath)
+		//TODO:check if symlink is valid, if not remove and recreate
+		//os.Remove(slink)
+		_, err = os.Stat(socketPath)
+		if err != nil && errors.Is(err, os.ErrNotExist) {
+			if err := os.Symlink(sp, socketPath); err != nil {
+				err := fmt.Errorf("error creating socket symbolic link %s,%w", socketPath, err)
+				log.Error(err)
+				return err
+			}
+			log.Infof("Symlink %s created successfully", socketPath)
+		}
+		return nil
+	//TODO
+	case "windows":
+		return nil
+	//TODO
+	case "linux":
+		return nil
+	}
+	return nil
 }

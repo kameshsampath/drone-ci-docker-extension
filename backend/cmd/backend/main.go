@@ -51,45 +51,15 @@ func main() {
 	router.GET("/stage/:id", h.GetStage)
 	router.GET("/stage/:pipelineFile", h.GetStagesByPipelineFile)
 	router.POST("/stages", h.SaveStages)
-	router.PATCH("/stage/:id/:status", h.UpdateStageStatus)
-	router.PATCH("/step/:id/:status", h.UpdateStepStatus)
+	router.PATCH("/stage/status", h.UpdateStageStatus)
+	router.PATCH("/step/status", h.UpdateStepStatus)
 	router.DELETE("/stages", h.DeleteAllStages)
 	router.DELETE("/stages/:id", h.DeleteStage)
 	router.DELETE("/pipeline/:pipelineFile", h.DeletePipeline)
-	//TODO stream
-	router.GET("/stage/:id/logs", h.StageLogs)
-
-	//TODO cleanup
-	// //Configure Path to save logs
-	// // if _, ok := os.LookupEnv("DRONE_CI_EXTENSION_LOGS_PATH"); !ok {
-	// // 	logsPath = path.Join(filepath.Dir(dbFile), "logs")
-	// // 	os.Setenv("DRONE_CI_EXTENSION_LOGS_PATH", logsPath)
-	// // }
-
-	// _, err = os.Stat(logsPath)
-	// if err != nil && errors.Is(err, os.ErrNotExist) {
-	// 	log.Infof("Creating logs directory %s", logsPath)
-	// 	os.MkdirAll(logsPath, 0644)
-	// }
-
-	//Start the monitor to monitor pipeline
-	//TODO remove
-	// cfg, err := monitor.New(h.DatabaseConfig.Ctx,
-	// 	h.DatabaseConfig.DB,
-	// 	h.DatabaseConfig.Log, monitor.WithLogsPath(logsPath))
-
-	// if err != nil {
-	// 	log.Fatal(err)
-	// } else {
-	// 	go cfg.MonitorAndLog()
-	// }
+	//TODO stream or remove??
+	router.GET("/stage/:pipelineid/logs", h.StageLogs)
 
 	log.Fatal(router.Start(startURL))
-	//TODO remove
-	// for {
-	// 	errCh := <-cfg.MonitorErrors
-	// 	log.Error(errCh.Error())
-	// }
 }
 
 func listen(path string) (net.Listener, error) {

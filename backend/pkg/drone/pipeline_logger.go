@@ -8,24 +8,23 @@ import (
 
 	"github.com/bfontaine/jsons"
 	"github.com/drone/runner-go/pipeline"
-	"github.com/harness/drone-ci-docker-extension/pkg/utils"
 )
 
-type JSONFileStreamer struct {
+type jSONFileStreamer struct {
 	seq    *sequence
 	col    *sequence
 	writer *jsons.FileWriter
 }
 
-var _ pipeline.Streamer = (*JSONFileStreamer)(nil)
+var _ pipeline.Streamer = (*jSONFileStreamer)(nil)
 
-func New(pipelineID string) (*JSONFileStreamer, error) {
-	logFile := path.Join(utils.LookupEnvOrString("DRONE_CI_EXTENSION_LOGS_PATH", "/data/logs"), fmt.Sprintf("%s.json", pipelineID))
+func newStreamer(pipelineID string) (*jSONFileStreamer, error) {
+	logFile := path.Join(droneCILogsDir, fmt.Sprintf("%s.json", pipelineID))
 	fw := jsons.NewFileWriter(logFile)
 	if err := fw.Open(); err != nil {
 		return nil, err
 	}
-	return &JSONFileStreamer{
+	return &jSONFileStreamer{
 		seq:    new(sequence),
 		col:    new(sequence),
 		writer: fw,
@@ -33,7 +32,7 @@ func New(pipelineID string) (*JSONFileStreamer, error) {
 }
 
 // Stream implements pipeline.Streamer
-func (j *JSONFileStreamer) Stream(_ context.Context, _ *pipeline.State, name string) io.WriteCloser {
+func (j *jSONFileStreamer) Stream(_ context.Context, _ *pipeline.State, name string) io.WriteCloser {
 	return &jsonlogger{
 		writer: j.writer,
 		seq:    j.seq,

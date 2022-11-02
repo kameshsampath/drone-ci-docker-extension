@@ -13,4 +13,5 @@ backend/demo.db
 test.db
 ui/.pnpm-store
 backend/work
+backend/.vscode
 dist

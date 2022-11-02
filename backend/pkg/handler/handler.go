@@ -12,6 +12,7 @@ import (
 	"github.com/harness/drone-ci-docker-extension/pkg/db"
 	"github.com/harness/drone-ci-docker-extension/pkg/utils"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
@@ -307,7 +308,7 @@ func (h *Handler) UpdateStageStatus(c echo.Context) error {
 	}
 
 	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		log.Infof("Updating Stage Find Stage : %#v", stageUReq)
+		log.Infof("Updating Stage : %#v", stageUReq)
 		status := fromDroneStatus(stageUReq.Status)
 		log.Infof("Updating Stage %s with status %s", stageUReq.StageName, status)
 		_, err := dbConn.NewUpdate().
@@ -421,27 +422,28 @@ func (h *Handler) CheckIfStepExists(c echo.Context) bool {
 	return exists
 }
 
-func findStage(ctx context.Context, dbConn *bun.DB, name string, pipelineFile string, stage *db.Stage) error {
-	if err := dbConn.NewSelect().
-		Model(stage).
-		Where("name = ? and pipeline_file = ? ", name, pipelineFile).
-		Scan(ctx); err != nil {
-		return err
-	}
-	return nil
-}
+// func findStage(ctx context.Context, dbConn *bun.DB, name string, pipelineFile string, stage *db.Stage) error {
+// 	if err := dbConn.NewSelect().
+// 		Model(stage).
+// 		Where("name = ? and pipeline_file = ? ", name, pipelineFile).
+// 		Scan(ctx); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func findStep(ctx context.Context, dbConn *bun.DB, name string, stageID int, step *db.StageStep) error {
-	if err := dbConn.NewSelect().
-		Model(step).
-		Where("name = ? and stage_id = ?", name, stageID).
-		Scan(ctx); err != nil {
-		return err
-	}
-	return nil
-}
+// func findStep(ctx context.Context, dbConn *bun.DB, name string, stageID int, step *db.StageStep) error {
+// 	if err := dbConn.NewSelect().
+// 		Model(step).
+// 		Where("name = ? and stage_id = ?", name, stageID).
+// 		Scan(ctx); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
 func fromDroneStatus(droneStatus string) db.Status {
+	log.Infof("Drone Status %s", droneStatus)
 	switch droneStatus {
 	case drone.StatusError:
 		return db.Error
@@ -449,6 +451,8 @@ func fromDroneStatus(droneStatus string) db.Status {
 		return db.Error
 	case drone.StatusKilled:
 		return db.Killed
+	case drone.StatusRunning:
+		return db.Running
 	case "success":
 		return db.Success
 	default:

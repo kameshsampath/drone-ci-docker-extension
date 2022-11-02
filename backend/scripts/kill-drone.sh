@@ -10,8 +10,8 @@ then
 	printf "\nKilling pipeline\n"
 	kill "$(cat "${SCRIPT_DIR}/${PIPELINE_PID_FILENAME}.pid")"
 	# remove the exsiting pipeline log file
-	if [ -d "${SCRIPT_DIR}/logs" ];
-	then
-	  rm -f  "${SCRIPT_DIR}/logs/${PIPELINE_PID_FILENAME}.json"
-	fi
+	# if [ -d "${SCRIPT_DIR}/logs" ];
+	# then
+	#  rm -f  "${SCRIPT_DIR}/logs/${PIPELINE_PID_FILENAME}.json"
+	# fi
 fi

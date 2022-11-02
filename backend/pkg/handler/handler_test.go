@@ -583,7 +583,7 @@ func TestUpdateStepStatus(t *testing.T) {
 	}{
 		"success": {
 			stepID:  1,
-			uriPath: "/stage/status",
+			uriPath: "/step/status",
 			dbFile:  "test",
 			requestBody: `{ "stageName": "default", 
 "stepName": "unit test",
@@ -593,7 +593,7 @@ func TestUpdateStepStatus(t *testing.T) {
 		},
 		"failed": {
 			stepID:  6,
-			uriPath: "/stage/status",
+			uriPath: "/step/status",
 			dbFile:  "test",
 			requestBody: `{ "stageName": "sleep-demos",
 "stepName" : "an error step",
@@ -603,7 +603,7 @@ func TestUpdateStepStatus(t *testing.T) {
 		},
 		"killed": {
 			stepID:  9,
-			uriPath: "/stage/status",
+			uriPath: "/step/status",
 			dbFile:  "test",
 			requestBody: `{ "stageName": "use-env",
 "stepName": "display environment variables",
@@ -613,7 +613,7 @@ func TestUpdateStepStatus(t *testing.T) {
 		},
 		"none": {
 			stepID:  8,
-			uriPath: "/stage/status",
+			uriPath: "/step/status",
 			dbFile:  "test",
 			requestBody: `{ "stageName": "default",
 "stepName": "good bye world",
