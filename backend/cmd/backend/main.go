@@ -53,6 +53,7 @@ func main() {
 	router.POST("/stages", h.SaveStages)
 	router.PATCH("/stage/status", h.UpdateStageStatus)
 	router.PATCH("/step/status", h.UpdateStepStatus)
+	router.PATCH("/stage/status/reset", h.ResetStepStatuses)
 	router.DELETE("/stages", h.DeleteAllStages)
 	router.DELETE("/stages/:id", h.DeleteStage)
 	router.DELETE("/pipeline/:pipelineFile", h.DeletePipeline)

@@ -185,6 +185,7 @@ func exec(cliContext *cli.Context) error {
 	// get a specific pipeline resource for execution.
 	if commy.Stage.Name == "" {
 		log.Infoln("No stage specified, assuming 'default'")
+		commy.Stage.Name = "default"
 	}
 
 	res, err := resource.Lookup(commy.Stage.Name, manifest)
@@ -376,7 +377,7 @@ func exec(cliContext *cli.Context) error {
 
 	pipelineID := utils.Md5OfString(commy.Source)
 
-	//JSON Log Streamer
+	// JSON Log Streamer
 	streamer, err := newStreamer(pipelineID)
 	if err != nil {
 		dump(pipelineID, map[string]interface{}{
@@ -387,7 +388,14 @@ func exec(cliContext *cli.Context) error {
 	}
 
 	// Update Status in DB
-	reporter := newDBReporter(ctx, commy.Source)
+	reporter, err := newDBReporter(ctx, commy.Source, commy.Stage.Name)
+	if err != nil {
+		dump(pipelineID, map[string]interface{}{
+			"error": err.Error(),
+			"state": state,
+		})
+		return err
+	}
 
 	err = runtime.NewExecer(
 		reporter,

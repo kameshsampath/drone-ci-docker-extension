@@ -12,7 +12,6 @@ import (
 	"github.com/harness/drone-ci-docker-extension/pkg/db"
 	"github.com/harness/drone-ci-docker-extension/pkg/utils"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
@@ -309,7 +308,7 @@ func (h *Handler) UpdateStageStatus(c echo.Context) error {
 
 	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		log.Infof("Updating Stage : %#v", stageUReq)
-		status := fromDroneStatus(stageUReq.Status)
+		status := h.fromDroneStatus(stageUReq.Status)
 		log.Infof("Updating Stage %s with status %s", stageUReq.StageName, status)
 		_, err := dbConn.NewUpdate().
 			Model((*db.Stage)(nil)).
@@ -336,7 +335,6 @@ func (h *Handler) UpdateStageStatus(c echo.Context) error {
 // 2  - Running
 // 3  - Error
 // 4  - Stopped/Killed
-
 func (h *Handler) UpdateStepStatus(c echo.Context) error {
 	log := h.DatabaseConfig.Log
 	ctx := h.DatabaseConfig.Ctx
@@ -347,7 +345,7 @@ func (h *Handler) UpdateStepStatus(c echo.Context) error {
 	}
 
 	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		status := fromDroneStatus(stepUReq.Status)
+		status := h.fromDroneStatus(stepUReq.Status)
 		log.Infof("Updating Step %s of Stage %s with status %s", stepUReq.StepName, stepUReq.StageName, status)
 		stageQ := dbConn.NewSelect().
 			Model((*db.Stage)(nil)).
@@ -358,6 +356,41 @@ func (h *Handler) UpdateStepStatus(c echo.Context) error {
 			Set("status = ?", status).
 			Where("stage_id IN (?) AND name = ? ", stageQ, stepUReq.StepName).
 			Exec(ctx)
+		return err
+	}); err != nil {
+		return err
+	}
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+	utils.TriggerUIRefresh(ctx, cli, log)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ResetStepStatuses resets the step statuses to db.None
+func (h *Handler) ResetStepStatuses(c echo.Context) error {
+	log := h.DatabaseConfig.Log
+	ctx := h.DatabaseConfig.Ctx
+	dbConn := h.DatabaseConfig.DB
+	stepUReq := &UpdateReq{}
+	if err := c.Bind(stepUReq); err != nil {
+		return err
+	}
+
+	if err := dbConn.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
+		log.Infof("Resetting Step statuses of Stage %#v to be none", stepUReq)
+		stageQ := dbConn.NewSelect().
+			Model((*db.Stage)(nil)).
+			Column("id").
+			Where("name = ? AND pipeline_file = ? ", stepUReq.StageName, stepUReq.PipelineFile, 1)
+		_, err := dbConn.NewUpdate().
+			Model((*db.StageStep)(nil)).
+			Set("status = ?", db.None).
+			Where("stage_id IN (?)", stageQ).
+			Exec(ctx)
+		log.Infoln("Step statuses reset to none")
 		return err
 	}); err != nil {
 		return err
@@ -383,7 +416,6 @@ func (h *Handler) CheckIfStageExists(c echo.Context) bool {
 	if err != nil {
 		return false
 	}
-
 	exists, err := dbConn.
 		NewSelect().
 		Model(&db.Stage{ID: stageID}).
@@ -442,8 +474,8 @@ func (h *Handler) CheckIfStepExists(c echo.Context) bool {
 // 	return nil
 // }
 
-func fromDroneStatus(droneStatus string) db.Status {
-	log.Infof("Drone Status %s", droneStatus)
+func (h *Handler) fromDroneStatus(droneStatus string) db.Status {
+	h.DatabaseConfig.Log.Infof("Drone Status %s", droneStatus)
 	switch droneStatus {
 	case drone.StatusError:
 		return db.Error

@@ -30,7 +30,7 @@ func nopReaderCloser(r io.Reader) io.ReadCloser {
 	return nopCloser{r}
 }
 
-func newDBReporter(_ context.Context, pipelineFile string) *dbReporter {
+func newDBReporter(ctx context.Context, pipelineFile string, stageName string) (*dbReporter, error) {
 	dbReporter := &dbReporter{
 		pipelineFile: pipelineFile,
 	}
@@ -42,7 +42,16 @@ func newDBReporter(_ context.Context, pipelineFile string) *dbReporter {
 			},
 		},
 	}
-	return dbReporter
+
+	// Reset all steps statuses to be None when starting new pipeline run
+	res, err := dbReporter.doPatch(ctx, "/stage/status/reset", fmt.Sprintf(reqTemplate, pipelineFile, stageName, "", ""))
+	if err != nil {
+		return nil, err
+	} else if res.StatusCode >= 400 {
+		return nil, fmt.Errorf("error patching '/stage/status'  %s", res.Status)
+	}
+
+	return dbReporter, nil
 }
 
 // ReportStage implements pipeline.Reporter
@@ -100,7 +109,9 @@ func (d *dbReporter) ReportStep(ctx context.Context, state *pipeline.State, step
 
 	// Update the stage status to be running when first stage is started
 	// and running
-	if i := runningStepIndex(state.Stage, stepName); i == 0 && c.Status == drone.StatusRunning {
+	i := runningStepIndex(state.Stage, stepName)
+	if i == 0 && c.Status == drone.StatusRunning {
+		// Set Stage Status
 		res, err := d.doPatch(ctx, "/stage/status", data)
 		if err != nil {
 			return err

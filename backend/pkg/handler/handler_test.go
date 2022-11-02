@@ -648,3 +648,35 @@ func TestUpdateStepStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestResetStepStatus(t *testing.T) {
+	if err := loadFixtures(); err != nil {
+		t.Fatal(err)
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPatch, "/stage/status/reset", strings.NewReader(`{ "stageName": "default", 
+"stepName": "",
+"status": "",
+"pipelineFile": "/tmp/examples/hello-world/.drone.yml"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	ctx := context.TODO()
+	h := NewHandler(ctx, getDBFile("test"), log)
+	if c := e.NewContext(req, rec); assert.NoError(t, h.ResetStepStatuses(c)) {
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		dbConn := h.DatabaseConfig.DB
+		stage := &db.Stage{ID: 1}
+		err := dbConn.NewSelect().
+			Model(stage).
+			Relation("Steps").
+			Where("name = ? AND pipeline_file = ? ", "default", "/tmp/examples/hello-world/.drone.yml", 1).
+			Scan(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range stage.Steps {
+			got := step.Status
+			assert.Equalf(t, db.None, got, `Expecting status to be "%s" but got "%s"`, db.None, got)
+		}
+	}
+}
