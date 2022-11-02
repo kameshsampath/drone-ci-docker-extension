@@ -12,6 +12,7 @@ import StopPipelineDialog from './dialogs/StopPipelineDialog';
 import { useSelector } from 'react-redux/es/hooks/useSelector';
 import { RootState } from '../app/store';
 import { selectPipelineStatus } from '../features/pipelinesSlice';
+import { Status } from '../features/types';
 
 export const PipelineRowActions = (props: { workspacePath: string; pipelineFile: string; logHandler; openHandler }) => {
   //!!!IMPORTANT - pass the location query params
@@ -66,9 +67,13 @@ export const PipelineRowActions = (props: { workspacePath: string; pipelineFile:
       spacing={2}
     >
       <Tooltip title="Run Pipeline">
-        <IconButton component={NavigateToRunView}>
-          <PlayCircleFilledWhiteIcon color="info" />
-        </IconButton>
+        <span>
+          <IconButton
+            component={NavigateToRunView}
+            disabled={pipelineStatus == Status.RUNNING}>
+            <PlayCircleFilledWhiteIcon color={pipelineStatus === Status.RUNNING ? "disabled" : "info"} />
+          </IconButton>
+        </span>
       </Tooltip>
       <Tooltip title="Open in VS Code">
         <IconButton
@@ -84,10 +89,10 @@ export const PipelineRowActions = (props: { workspacePath: string; pipelineFile:
       </Tooltip>
       <Tooltip title="Stop Pipeline">
         <span>
-          <IconButton 
+          <IconButton
             onClick={handleStopPipeline}
             color="primary"
-            disabled={pipelineStatus != 2}>
+            disabled={pipelineStatus != Status.RUNNING}>
             <StopCircleIcon />
           </IconButton>
         </span>
@@ -100,9 +105,13 @@ export const PipelineRowActions = (props: { workspacePath: string; pipelineFile:
         />
       )}
       <Tooltip title="Remove Pipeline">
-        <IconButton onClick={handleDeletePipelines}>
-          <DeleteIcon color="error" />
-        </IconButton>
+        <span>
+          <IconButton
+            onClick={handleDeletePipelines}
+            disabled={pipelineStatus != Status.RUNNING}>
+            <DeleteIcon color={pipelineStatus === Status.RUNNING ? "disabled" : "error"} />
+          </IconButton>
+        </span>
       </Tooltip>
       {removeConfirm && (
         <RemovePipelineDialog

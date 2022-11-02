@@ -217,51 +217,21 @@ export default function RunPipelineDialog({ ...props }) {
     //     }
     //   }
     // });
-
-    const stageName = includeStages && includeStages.length > 0 ? includeStages[0] : undefined;
-
     try {
-      let once = 0;
       ddClient.extension.host.cli.exec('run-drone', pipelineExecArgs, {
         stream: {
+          //TODO verify if it can handle error
           onOutput(data) {
-            console.log('onOutput:%s', JSON.stringify(data));
             if (data.stderr) {
               // any signals to kill the drone process will be treated 
               // graciously - as it will denote docker signal 137 which
               // wil be shown as "Stopped"
-              if (data.stderr === 'received signal, terminating process'){
+              if (data.stderr.trim() === 'received signal, terminating process') {
                 return;
               }
-              showError(data.stderr);
-              return;
+              showError(data.stderr)
             }
-            if (once === 1) {
-              const stage = stages.find((s) => s.name === stageName);
-              //make it writable and set the status
-              const runningStage = Object.assign({}, stage);
-              //Reset step status
-              let steps = runningStage.steps;
-              for (let i = 0; i < steps.length; i++) {
-                //make it writable and set the status
-                const oldStep = steps[i];
-                const toBeRunStep = Object.assign({}, oldStep);
-                toBeRunStep.status = Status.NONE;
-                console.debug('toBeRunStep %s', JSON.stringify(toBeRunStep));
-                steps = [...steps.slice(0, i), toBeRunStep, ...steps.slice(i + 1)];
-              }
-              runningStage.steps = steps;
-              console.debug('runningStage %s', JSON.stringify(runningStage));
-              logHandler(
-                {
-                  stage: runningStage
-                },
-                true
-              );
-            }
-            once++;
-          },
-          splitOutputLines: true
+          }
         }
       });
     } catch (err) {
