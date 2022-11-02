@@ -2,8 +2,7 @@ import React, { useEffect } from 'react';
 import { useState } from 'react';
 import { createSearchParams, Link as RouterLink, LinkProps as RouterLinkProps } from 'react-router-dom';
 import { IconButton, Stack, Tooltip } from '@mui/material';
-import { md5, vscodeURI } from '../utils';
-import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
+import {vscodeURI } from '../utils';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RemovePipelineDialog from './dialogs/RemovePipelineDialog';
 import PlayCircleFilledWhiteIcon from '@mui/icons-material/PlayCircleFilledWhite';
@@ -14,7 +13,7 @@ import { RootState } from '../app/store';
 import { selectPipelineStatus } from '../features/pipelinesSlice';
 import { Status } from '../features/types';
 
-export const PipelineRowActions = (props: { workspacePath: string; pipelineFile: string; logHandler; openHandler }) => {
+export const PipelineRowActions = (props: { workspacePath: string; pipelineFile: string; logHandler }) => {
   //!!!IMPORTANT - pass the location query params
   const [runViewURL, setRunViewURL] = useState({});
   const { pipelineFile, workspacePath } = props;

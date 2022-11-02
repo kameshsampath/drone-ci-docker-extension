@@ -21,7 +21,7 @@ export default function StopPipelineDialog({ ...props }) {
   const handleStopPipeline = async () => {
     setActionInProgress(true);
     try {
-      console.log("Stop Pipeline with id %s ", pipelineFile)
+      console.debug("Stop Pipeline with id %s ", pipelineFile)
       const pipelineId = md5(pipelineFile);
       await ddClient.extension.host.cli.exec("kill-drone", [pipelineId]);
       ddClient.desktopUI.toast.success(`Pipeline ${pipelineFile} successfully stopped`);

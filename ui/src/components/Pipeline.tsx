@@ -15,8 +15,6 @@ export const Pipeline = (props) => {
 
   const { labelId, pipelineFile, selected, onClick } = props;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [open, setOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [logs, setLogs] = useState('');
 
   const isSelected = (id: string) => selected.indexOf(id) !== -1;
@@ -93,7 +91,6 @@ export const Pipeline = (props) => {
             pipelineFile={pipelineFile}
             workspacePath={pipelinePath(pipelineFile)}
             logHandler={logHandler}
-            openHandler={setOpen}
           />
         </TableCell>
       </TableRow>

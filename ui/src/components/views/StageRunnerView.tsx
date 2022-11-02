@@ -29,6 +29,7 @@ import React from 'react';
 import { Stage, Status, Step } from '../../features/types';
 import { ExecProcess } from '@docker/extension-api-client-types/dist/v1';
 import { useAppDispatch } from '../../app/hooks';
+import { PipelineRowActions } from '../PipelineRowActions';
 
 function useQuery(loc) {
   const { search } = loc;
@@ -248,26 +249,11 @@ export const StageRunnerView = (props) => {
     console.debug('View Return URL %s', url);
     navigate(url, { replace: true });
   };
+  
   /* Handlers */
-
-  const handleDeletePipelines = () => {
-    setRemoveConfirm(true);
-  };
-
-  const handleRunPipeline = () => {
-    setOpenRunPipeline(true);
-  };
 
   const handleRunPipelineDialogClose = () => {
     setOpenRunPipeline(false);
-  };
-
-  const handleStopPipeline = () => {
-    setStopConfirm(true);
-  };
-
-  const handleStopPipelineDialogClose = () => {
-    setStopConfirm(false);
   };
 
   const hasServices = (steps: Step[]) => {
@@ -432,75 +418,10 @@ export const StageRunnerView = (props) => {
               alignContent: 'flex-end'
             }}
           >
-            <Tooltip title="Run Pipeline">
-              <IconButton
-                onClick={handleRunPipeline}
-                sx={{
-                  fontSize: '24px'
-                }}
-              >
-                <PlayCircleOutlineOutlinedIcon
-                  color="primary"
-                  sx={{
-                    fontSize: '26px'
-                  }}
-                />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Open in VS Code">
-              <IconButton
-                aria-label="edit in vscode"
-                color="primary"
-                href={vscodeURI(workspacePath)}
-                sx={{
-                  marginRight: '4px'
-                }}
-              >
-                <img
-                  src={process.env.PUBLIC_URL + '/images/vscode.png'}
-                  width="20px"
-                />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Stop Pipeline">
-              <span>
-                <IconButton
-                  onClick={handleStopPipeline}
-                  color="primary"
-                  disabled={pipelineStatus != 2}
-                  sx={{
-                    fontSize: '24px'
-                  }}
-                >
-                  <StopCircleOutlinedIcon
-                    sx={{
-                      fontSize: '28px'
-                    }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            {stopConfirm && (
-              <StopPipelineDialog
-                open={stopConfirm}
-                pipelineFile={pipelineFile}
-                onClose={handleStopPipelineDialogClose}
-              />
-            )}
-            <Tooltip title="Remove Pipeline">
-              <IconButton
-                onClick={handleDeletePipelines}
-                sx={{
-                  fontSize: '24px'
-                }}
-              >
-                <DeleteIcon
-                  color="primary"
-                  sx={{
-                    fontSize: '26px'
-                  }}
-                />
-              </IconButton>
-            </Tooltip>
+            <PipelineRowActions 
+              pipelineFile={pipelineFile}
+              workspacePath={pipelinePath(pipelineFile)}
+              logHandler={logHandler} />
             {removeConfirm && (
               <RemovePipelineDialog
                 open={removeConfirm}
