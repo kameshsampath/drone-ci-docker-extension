@@ -1,19 +1,15 @@
 import React, { useEffect } from 'react';
 import { useState } from 'react';
 import { createSearchParams, Link as RouterLink, LinkProps as RouterLinkProps } from 'react-router-dom';
-import { IconButton, Stack, Tooltip } from '@mui/material';
-import {vscodeURI } from '../utils';
-import DeleteIcon from '@mui/icons-material/Delete';
+import { Stack } from '@mui/material';
 import RemovePipelineDialog from './dialogs/RemovePipelineDialog';
-import PlayCircleFilledWhiteIcon from '@mui/icons-material/PlayCircleFilledWhite';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
 import StopPipelineDialog from './dialogs/StopPipelineDialog';
 import { useSelector } from 'react-redux/es/hooks/useSelector';
 import { RootState } from '../app/store';
 import { selectPipelineStatus } from '../features/pipelinesSlice';
-import { Status } from '../features/types';
+import { actionButtons } from './common/actions';
 
-export const PipelineRowActions = (props: { workspacePath: string; pipelineFile: string; logHandler }) => {
+export const PipelineRowActions = (props: { workspacePath: string; pipelineFile: string; logHandler; openHandler }) => {
   //!!!IMPORTANT - pass the location query params
   const [runViewURL, setRunViewURL] = useState({});
   const { pipelineFile, workspacePath } = props;
@@ -65,53 +61,14 @@ export const PipelineRowActions = (props: { workspacePath: string; pipelineFile:
       direction="row"
       spacing={2}
     >
-      <Tooltip title="Run Pipeline">
-        <span>
-          <IconButton
-            component={NavigateToRunView}
-            disabled={pipelineStatus == Status.RUNNING}>
-            <PlayCircleFilledWhiteIcon color={pipelineStatus === Status.RUNNING ? "disabled" : "info"} />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="Open in VS Code">
-        <IconButton
-          aria-label="edit in vscode"
-          color="primary"
-          href={vscodeURI(workspacePath)}
-        >
-          <img
-            src={process.env.PUBLIC_URL + '/images/vscode.png'}
-            width="16"
-          />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title="Stop Pipeline">
-        <span>
-          <IconButton
-            onClick={handleStopPipeline}
-            color="primary"
-            disabled={pipelineStatus != Status.RUNNING}>
-            <StopCircleIcon />
-          </IconButton>
-        </span>
-      </Tooltip>
-      {stopConfirm && (
+     {actionButtons(pipelineStatus,workspacePath,handleStopPipeline,handleDeletePipelines,NavigateToRunView)}
+     {stopConfirm && (
         <StopPipelineDialog
           open={stopConfirm}
           pipelineFile={pipelineFile}
           onClose={handleStopPipelineDialogClose}
         />
       )}
-      <Tooltip title="Remove Pipeline">
-        <span>
-          <IconButton
-            onClick={handleDeletePipelines}
-            disabled={pipelineStatus != Status.RUNNING}>
-            <DeleteIcon color={pipelineStatus === Status.RUNNING ? "disabled" : "error"} />
-          </IconButton>
-        </span>
-      </Tooltip>
       {removeConfirm && (
         <RemovePipelineDialog
           open={removeConfirm}
